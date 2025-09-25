@@ -1,0 +1,7 @@
+numpy
+opencv-python
+PyWavelets
+scikit-image
+tqdm
+matplotlib
+seaborn

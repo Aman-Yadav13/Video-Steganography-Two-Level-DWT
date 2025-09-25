@@ -1,0 +1,34 @@
+# --- Python Virtual Environments ---
+# Ignore the virtual environment folder
+venv/
+.venv/
+env/
+.env
+
+# --- Python Cache & Compiled Files ---
+# Ignore byte-compiled files and cache directories
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Project-Specific Folders ---
+# Ignore all generated output files (videos, plots, etc.)
+output/
+
+# Ignore large media files in the data folder.
+# It's best practice not to commit large files like videos to Git.
+# If you must, consider using Git LFS (Large File Storage).
+data/*.mp4
+
+# --- IDE & Editor Configuration ---
+# Ignore configuration files from common editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# --- OS-generated Files ---
+# Ignore system files from macOS and Windows
+.DS_Store
+Thumbs.db
