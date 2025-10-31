@@ -3,10 +3,63 @@ import numpy as np
 import time
 from src.video_processor import split_video_to_frames, mux_frames_to_video
 from src.chaotic_maps import get_seed_from_password, logistic_map, henon_map
-from src.encryption import encrypt_payload
-from src.steganography import embed_dwt
-from src.metrics import calculate_metrics
+from src.encryption import encrypt_payload, decrypt_payload
+from src.steganography import embed_dwt, extract_dwt
+from src.metrics import calculate_metrics, calculate_ber
 from src.analysis import plot_psnr_per_frame, plot_original_vs_stego_frame, plot_y_channel_histogram
+
+def extract_payload_from_stego(video_path, password, total_bits):
+    """
+    Implements the video steganography extraction process.
+    """
+    seed = get_seed_from_password(password)
+    key_size = total_bits * 2
+    logistic_key = logistic_map(seed, key_size) # For decryption XOR
+    henon_key = henon_map(seed, 20000)        # For extraction positions
+    print("✅ Chaotic keys generated for extraction.")
+    
+    stego_frames = split_video_to_frames(video_path)
+    if not stego_frames:
+        print("❌ Error: Could not read stego frames.")
+        return None
+    
+    all_extracted_bits = []
+    bits_extracted = 0
+    
+    print("\n🔬 Starting extraction process...")
+    for i, frame in enumerate(stego_frames):
+        if bits_extracted >= total_bits:
+            break
+
+        yuv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2YUV)
+        stego_y, u, v = cv2.split(yuv_frame)
+
+        chunk_size = 6000 # Must match the chunk_size used in embedding!
+        bits_to_extract_this_frame = min(chunk_size, total_bits - bits_extracted)
+        
+        if bits_to_extract_this_frame > 0:
+            extracted_chunk = extract_dwt(
+                stego_y.astype(np.float32), # DWT operates better on float
+                bits_to_extract_this_frame,
+                henon_key
+            )
+            all_extracted_bits.extend(extracted_chunk)
+            bits_extracted += len(extracted_chunk)
+
+        print(f"Extracted from Frame {i+1}/{len(stego_frames)} | Total bits: {bits_extracted}")
+    
+    extracted_scrambled_bits = np.array(all_extracted_bits)
+    
+    secret_payload_bits = decrypt_payload(
+        extracted_scrambled_bits, 
+        logistic_key, 
+        total_bits
+    )
+    
+    secret_payload_bytes = np.packbits(secret_payload_bits)
+    secret_payload_string = secret_payload_bytes.tobytes().decode('utf-8', errors='ignore')
+    
+    return secret_payload_bits, secret_payload_string
 
 def main():
     """
@@ -118,6 +171,22 @@ def main():
     print(f"Total Runtime: {runtime:.2f} seconds")
     # BER would be 0 as we haven't implemented extraction and comparison yet.
 
+    print("\n--- 🕵️ Starting Extraction Test ---")
+    
+    extracted_bits, extracted_string = extract_payload_from_stego(
+        OUTPUT_VIDEO_PATH, 
+        PASSWORD, 
+        total_bits_to_embed 
+    )
+    
+    if extracted_bits is not None:
+        ber = calculate_ber(encrypted_bits, extracted_bits)
+        
+        print(f"✅ Extracted Payload (Start): {extracted_string[:50]}...")
+        print(f"Original Payload (Start): {payload_string[:50]}...")
+        print(f"Bit Error Rate (BER): {ber:.6f}")
+        
+    
     # --- 8. Generate Analysis Plots ---
     print("\n--- 📈 Generating Performance Plots ---")
     plot_psnr_per_frame(psnr_scores, len(original_frames), output_path='./output/psnr_per_frame.png')
